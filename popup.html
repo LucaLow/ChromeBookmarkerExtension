@@ -1,62 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <style>
-    body {
-      width: 250px;
-      padding: 15px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f9f9f9;
-    }
-    h2 {
-      margin-top: 0;
-      font-size: 16px;
-      color: #333;
-    }
-    .card {
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      margin-bottom: 15px;
-    }
-    #last-site {
-      font-size: 12px;
-      color: #666;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-bottom: 5px;
-      display: block;
-    }
-    button {
-      width: 100%;
-      padding: 10px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: background 0.2s;
-    }
-    button:hover {
-      background-color: #45a049;
-    }
-    button:disabled {
-      background-color: #ccc;
-      cursor: not-allowed;
-    }
-  </style>
+  <title>Bookmarker</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-  <h2>📖 Continue Reading</h2>
-  
-  <div class="card">
-    <span id="last-site">No history found...</span>
-    <button id="resume-btn" disabled>Return to Last Read</button>
+  <div class="container">
+    <button id="add-bookmark" class="btn btn-primary">Bookmark This Page</button>
+    <ul id="bookmarks-list"></ul>
+    <button id="clear-bookmarks" class="btn btn-danger">Clear All Bookmarks</button>
   </div>
-
   <script src="popup.js"></script>
 </body>
 </html>

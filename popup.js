@@ -1,29 +1,143 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const siteLabel = document.getElementById('last-site');
-  const resumeBtn = document.getElementById('resume-btn');
-  
-  let savedUrl = '';
+  const addBookmarkBtn = document.getElementById('add-bookmark');
+  const bookmarksList = document.getElementById('bookmarks-list');
+  const clearBookmarksBtn = document.getElementById('clear-bookmarks');
 
-  // 1. Load the last saved state from storage
-  chrome.storage.local.get(['bookmark'], (result) => {
-    if (result.bookmark) {
-      savedUrl = result.bookmark.url;
-      const title = result.bookmark.title || savedUrl;
-      
-      siteLabel.textContent = title;
-      siteLabel.title = savedUrl; // Tooltip for full URL
-      resumeBtn.disabled = false;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('about:') || tab.url.startsWith('https://chrome.google.com/webstore')) {
+      addBookmarkBtn.disabled = true;
+      addBookmarkBtn.textContent = 'Cannot bookmark this page';
     }
   });
 
-  // 2. Handle the Resume button click
-  resumeBtn.addEventListener('click', () => {
-    if (!savedUrl) return;
-
-    // Set a flag so content.js knows to scroll immediately upon loading
-    chrome.storage.local.set({ 'isResuming': true }, () => {
-      // Create a new tab with the saved URL
-      chrome.tabs.create({ url: savedUrl });
+  const loadBookmarks = () => {
+    chrome.storage.local.get(['bookmarks'], (result) => {
+      const bookmarks = result.bookmarks || [];
+      renderBookmarks(bookmarks);
     });
-  });
+  };
+
+  const renderBookmarks = (bookmarks) => {
+    bookmarksList.innerHTML = '';
+    if (bookmarks.length === 0) {
+      const emptyMessage = document.createElement('li');
+      emptyMessage.textContent = 'No bookmarks yet!';
+      emptyMessage.style.textAlign = 'center';
+      emptyMessage.style.color = '#888';
+      bookmarksList.appendChild(emptyMessage);
+      return;
+    }
+    bookmarks.forEach((bookmark) => {
+      const listItem = document.createElement('li');
+      listItem.className = 'bookmark-item';
+
+      const link = document.createElement('a');
+      link.href = bookmark.url;
+      link.textContent = bookmark.title;
+      link.title = bookmark.url;
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        chrome.storage.local.set({ 'isResuming': bookmark.url }, () => {
+          chrome.tabs.create({ url: bookmark.url });
+        });
+      });
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.addEventListener('click', () => {
+        deleteBookmark(bookmark.url);
+      });
+
+      listItem.appendChild(link);
+      listItem.appendChild(deleteBtn);
+      bookmarksList.appendChild(listItem);
+    });
+  };
+
+  const addBookmark = () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+
+      const getScrollPosition = (callback) => {
+        if (chrome.scripting) {
+          chrome.scripting.executeScript(
+            {
+              target: { tabId: tab.id },
+              func: () => window.scrollY,
+            },
+            (injectionResults) => {
+              if (chrome.runtime.lastError || !injectionResults || !injectionResults.length) {
+                console.error('Failed to get scroll position with chrome.scripting:', chrome.runtime.lastError);
+                callback(null);
+                return;
+              }
+              callback(injectionResults[0].result);
+            }
+          );
+        } else {
+          chrome.tabs.executeScript(
+            tab.id,
+            { code: 'window.scrollY;' },
+            (results) => {
+              if (chrome.runtime.lastError || !results || results.length === 0) {
+                console.error('Failed to get scroll position with chrome.tabs:', chrome.runtime.lastError);
+                callback(null);
+                return;
+              }
+              callback(results[0]);
+            }
+          );
+        }
+      };
+
+      getScrollPosition((scrollY) => {
+        if (scrollY === null) {
+          // an error occurred
+          return;
+        }
+
+        const newBookmark = {
+          url: tab.url,
+          title: tab.title,
+          scrollY: scrollY
+        };
+
+        chrome.storage.local.get(['bookmarks'], (result) => {
+          const bookmarks = result.bookmarks || [];
+          const existingBookmarkIndex = bookmarks.findIndex(b => b.url === newBookmark.url);
+          if (existingBookmarkIndex > -1) {
+            bookmarks[existingBookmarkIndex] = newBookmark;
+          } else {
+            bookmarks.push(newBookmark);
+          }
+          chrome.storage.local.set({ bookmarks: bookmarks }, () => {
+            loadBookmarks();
+          });
+        });
+      });
+    });
+  };
+
+  const deleteBookmark = (url) => {
+    chrome.storage.local.get(['bookmarks'], (result) => {
+      const bookmarks = result.bookmarks || [];
+      const updatedBookmarks = bookmarks.filter(b => b.url !== url);
+      chrome.storage.local.set({ bookmarks: updatedBookmarks }, () => {
+        loadBookmarks();
+      });
+    });
+  };
+
+  const clearBookmarks = () => {
+    chrome.storage.local.set({ bookmarks: [] }, () => {
+      loadBookmarks();
+    });
+  };
+
+  addBookmarkBtn.addEventListener('click', addBookmark);
+  clearBookmarksBtn.addEventListener('click', clearBookmarks);
+
+  loadBookmarks();
 });

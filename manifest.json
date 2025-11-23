@@ -5,7 +5,8 @@
   "description": "Tracks your read position and lets you resume exactly where you left off.",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
