@@ -6,9 +6,18 @@
 </head>
 <body>
   <div class="container">
-    <button id="add-bookmark" class="btn btn-primary">Bookmark This Page</button>
+    <div class="search-container">
+      <input type="text" id="search" placeholder="Search bookmarks...">
+    </div>
+    <div class="buttons-container">
+      <button id="add-bookmark" class="btn btn-primary">Bookmark This Page</button>
+      <div class="track-container">
+        <input type="checkbox" id="track-domain">
+        <label for="track-domain">Track this domain</label>
+      </div>
+      <button id="clear-bookmarks" class="btn btn-danger">Clear All</button>
+    </div>
     <ul id="bookmarks-list"></ul>
-    <button id="clear-bookmarks" class="btn btn-danger">Clear All Bookmarks</button>
   </div>
   <script src="popup.js"></script>
 </body>
