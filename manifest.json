@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Page Booker",
+  "name": "BookMarker",
   "version": "1.0",
   "description": "Tracks your read position and lets you resume exactly where you left off.",
   "permissions": [

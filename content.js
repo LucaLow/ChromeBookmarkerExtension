@@ -1,5 +1,5 @@
 window.addEventListener('load', () => {
-  // --- Debounce function ---
+  // --- Utility helpers ---
   const debounce = (func, delay) => {
     let timeout;
     return (...args) => {
@@ -8,86 +8,87 @@ window.addEventListener('load', () => {
     };
   };
 
-  chrome.storage.local.get(['bookmarks', 'trackedPaths', 'isResuming'], (data) => {
-    const { bookmarks, trackedPaths, isResuming } = data;
-    const currentUrl = window.location.href;
-    const currentUrlWithoutProtocol = currentUrl.replace(/^https?:\/\/(www\.)?/, '');
 
-    let scrollListenerAdded = false;
+  // url: https://x.com/hi returns x.com/
+  const fullURLStrip = (url) => {x = url.replace(/^https?:\/\/(www\.)?/, '')
+    return x.substring(0, x.lastIndexOf('/') + 1);
+  }
+  
+  // url: https://x.com/hi returns x.com/hi
+  const partialURLStrip = (url) => {return url.replace(/^https?:\/\/(www\.)?/, '')}
+  
+  const stripProtocol = (url) => url.replace(/^https?:\/\/(www\.)?/, '');
 
-    // --- Auto-update scroll position for specific bookmarks ---
-    if (bookmarks) {
-      const bookmark = bookmarks.find(b => b.url === currentUrl);
-      if (bookmark) {
-        const saveBookmarkScroll = () => {
-          const scrollY = window.scrollY;
-          chrome.storage.local.get(['bookmarks'], (data) => {
-            const updatedBookmarks = data.bookmarks.map(b => {
-              if (b.url === currentUrl) {
-                return { ...b, scrollY: scrollY };
-              }
-              return b;
-            });
-            chrome.storage.local.set({ bookmarks: updatedBookmarks });
-          });
-        };
-        window.addEventListener('scroll', debounce(saveBookmarkScroll, 500));
-        scrollListenerAdded = true;
-      }
-    }
 
-    // --- Automatic scroll tracking for tracked paths (if no bookmark on this page) ---
-    if (!scrollListenerAdded && trackedPaths) {
-      const trackedPath = Object.keys(trackedPaths).find(path => currentUrlWithoutProtocol.startsWith(path));
-      if (trackedPath) {
-        const savePathScroll = () => {
-          const scrollY = window.scrollY;
-          chrome.storage.local.get(['trackedPaths'], (data) => {
-            let paths = data.trackedPaths || {};
-            if (paths[trackedPath]) {
-              paths[trackedPath] = { lastUrl: currentUrl, scrollY: scrollY };
-              chrome.storage.local.set({ trackedPaths: paths });
-            }
-          });
-        };
-        window.addEventListener('scroll', debounce(savePathScroll, 500));
-      }
+  const currentUrl = window.location.href;
+  const currentUrlWithoutProtocol = partialURLStrip(currentUrl);
+
+  let bookmarkScrollListenerAttached = false;
+  let bookmarkScrollHandler = null;
+
+  const attachBookmarkScrollListener = () => {
+    if (bookmarkScrollListenerAttached) return;
+
+    const saveBookmarkScroll = () => {
+      const scrollY = window.scrollY;
+      chrome.storage.local.get(['bookmarks'], (data) => {
+        const storedBookmarks = data.bookmarks || [];
+        const updatedBookmarks = storedBookmarks.map(b => (b.url === currentUrl ? { ...b, scrollY } : b));
+        chrome.storage.local.set({ bookmarks: updatedBookmarks });
+      });
+    };
+
+    bookmarkScrollHandler = debounce(saveBookmarkScroll, 500);
+    window.addEventListener('scroll', bookmarkScrollHandler);
+    bookmarkScrollListenerAttached = true;
+  };
+
+  chrome.storage.local.get(['bookmarks', 'isResuming'], (data) => {
+    const { bookmarks = [], isResuming } = data;
+    console.log({bookmarks})
+    console.log({isResuming})
+
+    if (bookmarks.some(b => b.fuzzyURL === fullURLStrip(currentUrl))) {
+      attachBookmarkScrollListener();
     }
 
     // --- Resume Logic ---
     if (!isResuming) return;
-    
+
     const resumeUrl = isResuming;
     let scrollY;
     let targetUrl = resumeUrl;
+    const resumeWithoutProtocol = stripProtocol(resumeUrl);
 
-    if (trackedPaths) {
-      const trackedPath = Object.keys(trackedPaths).find(p => resumeUrl.replace(/^https?:\/\/(www\.)?/, '').startsWith(p));
-      if (trackedPath && trackedPaths[trackedPath]) {
-        targetUrl = trackedPaths[trackedPath].lastUrl;
-        scrollY = trackedPaths[trackedPath].scrollY;
-      }
-    }
-    
-    if (bookmarks) {
+    if (bookmarks.length) {
       const bookmark = bookmarks.find(b => b.url === resumeUrl);
-      if (bookmark && (!trackedPath || trackedPath && targetUrl === resumeUrl)) {
+      if (bookmark && targetUrl === resumeUrl) {
         scrollY = bookmark.scrollY;
       }
     }
 
     if (window.location.href !== targetUrl) {
       window.location.href = targetUrl;
-    } else {
-      if (scrollY !== undefined) {
-        window.scrollTo({
-          top: scrollY,
-          behavior: 'smooth'
-        });
-      }
+    } else if (scrollY !== undefined) {
+      window.scrollTo({
+        top: scrollY,
+        behavior: 'smooth'
+      });
     }
 
-    // Turn off the resume flag
     chrome.storage.local.remove('isResuming');
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    // On device compared with google account...
+    if (areaName !== 'local') return;
+
+    if (changes.bookmarks) {
+      const bookmarks = changes.bookmarks.newValue || [];
+      const hasBookmarkForPage = bookmarks.some(b => b.url === currentUrl);
+      if (hasBookmarkForPage) {
+        attachBookmarkScrollListener();
+      }
+    }
   });
 });
