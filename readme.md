@@ -1,13 +1,3 @@
-Searched codebase for "Create a comprehensive readme.md for this project.", 7 results
-
-I’ll scan the project files to understand features, then draft a detailed `README.md` tailored to your extension.
-
-Searched codebase for "Chrome bookmarker extension popup.js manifest.json style.css", 7 results
-
-Here’s a comprehensive `README.md` you can use for the project.
-
----
-
 # BookMarker – Resume Reading Exactly Where You Left Off
 
 BookMarker is a Chrome extension that upgrades your bookmarks so they remember **exactly where you stopped reading on a page**, not just the page itself. It tracks your scroll position on long articles, documentation, tutorials, and any other web content, then brings you straight back to that spot when you return.
