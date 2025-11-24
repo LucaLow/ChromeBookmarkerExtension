@@ -12,15 +12,10 @@
     </div>
     <div class="buttons-container">
       <button id="add-bookmark" class="btn btn-primary">Bookmark This Page</button>
-      <div class="track-container">
-        <input type="checkbox" id="track-domain">
-        <label for="track-domain">Track this domain</label>
-        <span id="tracking-status-icon"></span>
-        <div id="track-url-container" class="hidden">
-          <input type="text" id="track-url" placeholder="e.g., sample.com/book">
-        </div>
-      </div>
       <button id="clear-bookmarks" class="btn btn-danger">Clear All</button>
+    </div>
+    <div id="track-url-container">
+      <input type="text" id="track-url" placeholder="Enter a URL path to track...">
     </div>
     <ul id="bookmarks-list"></ul>
     <div id="notification" class="hidden"></div>

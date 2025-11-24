@@ -11,26 +11,46 @@ window.addEventListener('load', () => {
   chrome.storage.local.get(['bookmarks', 'trackedPaths', 'isResuming'], (data) => {
     const { bookmarks, trackedPaths, isResuming } = data;
     const currentUrl = window.location.href;
+    const currentUrlWithoutProtocol = currentUrl.replace(/^https?:\/\/(www\.)?/, '');
 
-    // --- Automatic scroll tracking for tracked paths ---
-    if (trackedPaths) {
-      for (const path in trackedPaths) {
-        if (currentUrl.startsWith(path)) {
-          const saveScrollPosition = () => {
-            const scrollY = window.scrollY;
-            
-            chrome.storage.local.get(['trackedPaths'], (data) => {
-              let paths = data.trackedPaths || {};
-              if (paths[path]) {
-                paths[path] = { lastUrl: currentUrl, scrollY: scrollY };
-                chrome.storage.local.set({ trackedPaths: paths });
+    let scrollListenerAdded = false;
+
+    // --- Auto-update scroll position for specific bookmarks ---
+    if (bookmarks) {
+      const bookmark = bookmarks.find(b => b.url === currentUrl);
+      if (bookmark) {
+        const saveBookmarkScroll = () => {
+          const scrollY = window.scrollY;
+          chrome.storage.local.get(['bookmarks'], (data) => {
+            const updatedBookmarks = data.bookmarks.map(b => {
+              if (b.url === currentUrl) {
+                return { ...b, scrollY: scrollY };
               }
+              return b;
             });
-          };
-          
-          window.addEventListener('scroll', debounce(saveScrollPosition, 500));
-          break; // only track one path per page
-        }
+            chrome.storage.local.set({ bookmarks: updatedBookmarks });
+          });
+        };
+        window.addEventListener('scroll', debounce(saveBookmarkScroll, 500));
+        scrollListenerAdded = true;
+      }
+    }
+
+    // --- Automatic scroll tracking for tracked paths (if no bookmark on this page) ---
+    if (!scrollListenerAdded && trackedPaths) {
+      const trackedPath = Object.keys(trackedPaths).find(path => currentUrlWithoutProtocol.startsWith(path));
+      if (trackedPath) {
+        const savePathScroll = () => {
+          const scrollY = window.scrollY;
+          chrome.storage.local.get(['trackedPaths'], (data) => {
+            let paths = data.trackedPaths || {};
+            if (paths[trackedPath]) {
+              paths[trackedPath] = { lastUrl: currentUrl, scrollY: scrollY };
+              chrome.storage.local.set({ trackedPaths: paths });
+            }
+          });
+        };
+        window.addEventListener('scroll', debounce(savePathScroll, 500));
       }
     }
 
@@ -42,16 +62,16 @@ window.addEventListener('load', () => {
     let targetUrl = resumeUrl;
 
     if (trackedPaths) {
-      const trackedPath = Object.keys(trackedPaths).find(p => resumeUrl.startsWith(p));
+      const trackedPath = Object.keys(trackedPaths).find(p => resumeUrl.replace(/^https?:\/\/(www\.)?/, '').startsWith(p));
       if (trackedPath && trackedPaths[trackedPath]) {
         targetUrl = trackedPaths[trackedPath].lastUrl;
         scrollY = trackedPaths[trackedPath].scrollY;
       }
     }
     
-    if (!scrollY && bookmarks) {
+    if (bookmarks) {
       const bookmark = bookmarks.find(b => b.url === resumeUrl);
-      if (bookmark) {
+      if (bookmark && (!trackedPath || trackedPath && targetUrl === resumeUrl)) {
         scrollY = bookmark.scrollY;
       }
     }

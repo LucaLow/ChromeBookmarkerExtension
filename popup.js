@@ -3,9 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addBookmarkBtn = document.getElementById('add-bookmark');
   const bookmarksList = document.getElementById('bookmarks-list');
   const clearBookmarksBtn = document.getElementById('clear-bookmarks');
-  const trackDomainCheckbox = document.getElementById('track-domain');
   const notification = document.getElementById('notification');
-  const trackUrlContainer = document.getElementById('track-url-container');
   const trackUrlInput = document.getElementById('track-url');
 
   let state = {
@@ -15,6 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
     currentTab: null,
   };
 
+  const setState = (newState) => {
+    state = { ...state, ...newState };
+    render();
+  };
+  
   const showNotification = (message) => {
     notification.textContent = message;
     notification.classList.add('show');
@@ -23,27 +26,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
   };
 
-  const setState = (newState) => {
-    state = { ...state, ...newState };
-    render();
-  };
-
   const render = () => {
     const filteredBookmarks = state.bookmarks.filter(b => 
       b.title.toLowerCase().includes(state.searchQuery.toLowerCase())
     );
     renderBookmarks(filteredBookmarks);
     if (state.currentTab) {
-      const suggestedPath = state.currentTab.url.substring(0, state.currentTab.url.lastIndexOf('/') + 1);
-      const isTracked = Object.keys(state.trackedPaths).some(path => state.currentTab.url.startsWith(path));
-      
-      trackDomainCheckbox.checked = isTracked;
-      trackUrlContainer.classList.toggle('hidden', !isTracked);
-      
-      if (isTracked) {
-        const trackedPath = Object.keys(state.trackedPaths).find(path => state.currentTab.url.startsWith(path));
+      const url = state.currentTab.url;
+      const existingBookmark = state.bookmarks.find(b => b.url === url);
+      if (existingBookmark) {
+        addBookmarkBtn.disabled = true;
+        addBookmarkBtn.textContent = 'Bookmarked';
+      } else {
+        addBookmarkBtn.disabled = false;
+        addBookmarkBtn.textContent = 'Bookmark This Page';
+      }
+
+      const urlWithoutProtocol = url.replace(/^https?:\/\/(www\.)?/, '');
+      const trackedPath = Object.keys(state.trackedPaths).find(path => urlWithoutProtocol.startsWith(path));
+      if (trackedPath) {
         trackUrlInput.value = trackedPath;
       } else {
+        const suggestedPath = urlWithoutProtocol.substring(0, urlWithoutProtocol.lastIndexOf('/') + 1);
         trackUrlInput.value = suggestedPath;
       }
     }
@@ -77,9 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
       link.title = bookmark.url;
       link.addEventListener('click', (e) => {
         e.preventDefault();
-        chrome.storage.local.set({ 'isResuming': bookmark.url }, () => {
-          chrome.tabs.create({ url: bookmark.url });
-        });
+        chrome.storage.local.set({ 'isResuming': bookmark.url });
+        chrome.tabs.create({ url: bookmark.url });
       });
 
       const editInput = document.createElement('input');
@@ -165,79 +168,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getScrollPosition = (callback) => {
       if (chrome.scripting) {
-        chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.scrollY }, (res) => callback(res[0].result));
+        chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.scrollY }, (res) => callback(res ? res[0].result : 0));
       } else {
-        chrome.tabs.executeScript(tab.id, { code: 'window.scrollY;' }, (res) => callback(res[0]));
+        chrome.tabs.executeScript(tab.id, { code: 'window.scrollY;' }, (res) => callback(res ? res[0] : 0));
       }
     };
 
     getScrollPosition((scrollY) => {
       const newBookmark = { url: tab.url, title: tab.title, scrollY: scrollY, favIconUrl: tab.favIconUrl };
-      const bookmarks = state.bookmarks;
-      const existingIndex = bookmarks.findIndex(b => b.url === newBookmark.url);
-      let notificationMessage = 'Bookmark added!';
-      if (existingIndex > -1) {
-        bookmarks[existingIndex] = newBookmark;
-        notificationMessage = 'Bookmark updated!';
-      } else {
-        bookmarks.push(newBookmark);
-      }
-      
-      chrome.storage.local.set({ bookmarks: bookmarks }, () => {
-        loadInitialData();
-        showNotification(notificationMessage);
-      });
+      const bookmarks = [...state.bookmarks, newBookmark];
+      setState({ bookmarks });
+      chrome.storage.local.set({ bookmarks });
+      showNotification('Bookmark added!');
     });
   };
   
   const updateBookmark = (url, updates) => {
     const bookmarks = state.bookmarks.map(b => b.url === url ? { ...b, ...updates } : b);
-    chrome.storage.local.set({ bookmarks: bookmarks }, () => {
-      loadInitialData();
-      showNotification('Bookmark updated!');
-    });
+    setState({ bookmarks });
+    chrome.storage.local.set({ bookmarks });
+    showNotification('Bookmark updated!');
   };
 
   const deleteBookmark = (url) => {
-    let bookmarks = state.bookmarks.filter(b => b.url !== url);
-    let trackedPaths = state.trackedPaths;
+    const bookmarks = state.bookmarks.filter(b => b.url !== url);
+    let trackedPaths = { ...state.trackedPaths };
     
-    const path = Object.keys(trackedPaths).find(p => url.startsWith(p));
+    const path = Object.keys(trackedPaths).find(p => url.replace(/^https?:\/\/(www\.)?/, '').startsWith(p));
     if (path) {
-      const remainingBookmarks = bookmarks.some(b => b.url.startsWith(path));
+      const remainingBookmarks = bookmarks.some(b => b.url.replace(/^https?:\/\/(www\.)?/, '').startsWith(path));
       if (!remainingBookmarks) {
         delete trackedPaths[path];
       }
     }
     
-    chrome.storage.local.set({ bookmarks: bookmarks, trackedPaths: trackedPaths }, () => {
-      loadInitialData();
-      showNotification('Bookmark deleted!');
-    });
+    setState({ bookmarks, trackedPaths });
+    chrome.storage.local.set({ bookmarks, trackedPaths });
+    showNotification('Bookmark deleted!');
   };
 
   const clearBookmarks = () => {
-    chrome.storage.local.set({ bookmarks: [], trackedPaths: {} }, () => {
-      loadInitialData();
-      showNotification('All bookmarks cleared!');
-    });
+    setState({ bookmarks: [], trackedPaths: {} });
+    chrome.storage.local.set({ bookmarks: [], trackedPaths: {} });
+    showNotification('All bookmarks cleared!');
   };
 
   const handleTrackPathChange = () => {
-    const trackedPaths = state.trackedPaths;
-    const path = trackUrlInput.value;
-    
-    if (trackDomainCheckbox.checked) {
-      if (path && !trackedPaths[path]) {
-        trackedPaths[path] = { lastUrl: state.currentTab.url, scrollY: 0 };
-      }
-    } else {
-      const trackedPath = Object.keys(trackedPaths).find(p => state.currentTab.url.startsWith(p));
-      if (trackedPath) {
-        delete trackedPaths[trackedPath];
-      }
+    const path = trackUrlInput.value.trim();
+    const trackedPaths = { ...state.trackedPaths };
+    const existingPath = Object.keys(trackedPaths).find(p => state.currentTab.url.replace(/^https?:\/\/(www\.)?/, '').startsWith(p));
+
+    if (existingPath && existingPath !== path) {
+      delete trackedPaths[existingPath];
     }
-    chrome.storage.local.set({ trackedPaths: trackedPaths }, loadInitialData);
+    
+    if (path !== '') {
+      trackedPaths[path] = { lastUrl: state.currentTab.url, scrollY: 0 };
+    }
+    
+    setState({ trackedPaths });
+    chrome.storage.local.set({ trackedPaths });
   };
 
   searchInput.addEventListener('input', (e) => {
@@ -246,7 +236,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   addBookmarkBtn.addEventListener('click', addBookmark);
   clearBookmarksBtn.addEventListener('click', clearBookmarks);
-  trackDomainCheckbox.addEventListener('change', handleTrackPathChange);
   trackUrlInput.addEventListener('change', handleTrackPathChange);
 
   const closeAllContextMenus = () => {
