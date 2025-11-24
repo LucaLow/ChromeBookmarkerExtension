@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const bookmarksList = document.getElementById('bookmarks-list');
   const clearBookmarksBtn = document.getElementById('clear-bookmarks');
   const notification = document.getElementById('notification');
-  const trackUrlInput = document.getElementById('track-url');
 
   let state = {
     bookmarks: [],
@@ -48,11 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
         addBookmarkBtn.disabled = false;
         addBookmarkBtn.textContent = 'Bookmark This Page';
       }
-
-      const suggestedPath = fullURLStrip(url)
-
-      // For text box in popup
-      trackUrlInput.value = suggestedPath;
     }
   };
 
@@ -81,8 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const link = document.createElement('a');
       link.href = bookmark.url;
-      console.log(`link.href: ${link.href}`)
-      console.log(`bookmark.url: ${bookmark.url}`)
       link.textContent = bookmark.title;
       link.title = bookmark.url;
       link.addEventListener('click', (e) => {
@@ -158,7 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadInitialData = () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const currentTab = tabs[0];
-      console.log({currentTab})
       chrome.storage.local.get(['bookmarks'], (result) => {
         setState({
           bookmarks: result.bookmarks || [],

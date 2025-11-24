@@ -33,7 +33,7 @@ window.addEventListener('load', () => {
       const scrollY = window.scrollY;
       chrome.storage.local.get(['bookmarks'], (data) => {
         const storedBookmarks = data.bookmarks || [];
-        const updatedBookmarks = storedBookmarks.map(b => (b.url === currentUrl ? { ...b, scrollY } : b));
+        const updatedBookmarks = storedBookmarks.map(b => (b.fuzzyURL === fullURLStrip(currentUrl) ? { ...b, scrollY: scrollY, url: currentUrl } : b));
         chrome.storage.local.set({ bookmarks: updatedBookmarks });
       });
     };
@@ -45,8 +45,6 @@ window.addEventListener('load', () => {
 
   chrome.storage.local.get(['bookmarks', 'isResuming'], (data) => {
     const { bookmarks = [], isResuming } = data;
-    console.log({bookmarks})
-    console.log({isResuming})
 
     if (bookmarks.some(b => b.fuzzyURL === fullURLStrip(currentUrl))) {
       attachBookmarkScrollListener();
