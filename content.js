@@ -1,64 +1,73 @@
-// --- Debounce function ---
-const debounce = (func, delay) => {
-  let timeout;
-  return (...args) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), delay);
-  };
-};
-
-// --- Automatic scroll tracking for tracked domains ---
-chrome.storage.local.get(['trackedDomains', 'domainScrollPositions'], (data) => {
-  const trackedDomains = data.trackedDomains || [];
-  const domain = window.location.hostname;
-
-  if (trackedDomains.includes(domain)) {
-    const saveScrollPosition = () => {
-      const scrollY = window.scrollY;
-      const url = window.location.href;
-      
-      let positions = data.domainScrollPositions || {};
-      positions[domain] = { scrollY, url };
-      
-      chrome.storage.local.set({ domainScrollPositions: positions });
-    };
-    
-    window.addEventListener('scroll', debounce(saveScrollPosition, 500));
-  }
-});
-
-
-// --- Resume Logic ---
 window.addEventListener('load', () => {
-  chrome.storage.local.get(['bookmarks', 'trackedDomains', 'domainScrollPositions', 'isResuming'], (data) => {
-    const { bookmarks, trackedDomains, domainScrollPositions, isResuming } = data;
+  // --- Debounce function ---
+  const debounce = (func, delay) => {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), delay);
+    };
+  };
 
+  chrome.storage.local.get(['bookmarks', 'trackedPaths', 'isResuming'], (data) => {
+    const { bookmarks, trackedPaths, isResuming } = data;
+    const currentUrl = window.location.href;
+
+    // --- Automatic scroll tracking for tracked paths ---
+    if (trackedPaths) {
+      for (const path in trackedPaths) {
+        if (currentUrl.startsWith(path)) {
+          const saveScrollPosition = () => {
+            const scrollY = window.scrollY;
+            
+            chrome.storage.local.get(['trackedPaths'], (data) => {
+              let paths = data.trackedPaths || {};
+              if (paths[path]) {
+                paths[path] = { lastUrl: currentUrl, scrollY: scrollY };
+                chrome.storage.local.set({ trackedPaths: paths });
+              }
+            });
+          };
+          
+          window.addEventListener('scroll', debounce(saveScrollPosition, 500));
+          break; // only track one path per page
+        }
+      }
+    }
+
+    // --- Resume Logic ---
     if (!isResuming) return;
     
     const resumeUrl = isResuming;
-    const domain = new URL(resumeUrl).hostname;
-
     let scrollY;
+    let targetUrl = resumeUrl;
 
-    if (trackedDomains && trackedDomains.includes(domain) && domainScrollPositions && domainScrollPositions[domain]) {
-      // If domain is tracked, use the last saved position for the domain
-      scrollY = domainScrollPositions[domain].scrollY;
-    } else if (bookmarks) {
-      // Otherwise, fall back to the bookmark's saved position
+    if (trackedPaths) {
+      const trackedPath = Object.keys(trackedPaths).find(p => resumeUrl.startsWith(p));
+      if (trackedPath && trackedPaths[trackedPath]) {
+        targetUrl = trackedPaths[trackedPath].lastUrl;
+        scrollY = trackedPaths[trackedPath].scrollY;
+      }
+    }
+    
+    if (!scrollY && bookmarks) {
       const bookmark = bookmarks.find(b => b.url === resumeUrl);
       if (bookmark) {
         scrollY = bookmark.scrollY;
       }
     }
 
-    if (scrollY !== undefined) {
-      window.scrollTo({
-        top: scrollY,
-        behavior: 'smooth'
-      });
+    if (window.location.href !== targetUrl) {
+      window.location.href = targetUrl;
+    } else {
+      if (scrollY !== undefined) {
+        window.scrollTo({
+          top: scrollY,
+          behavior: 'smooth'
+        });
+      }
     }
 
     // Turn off the resume flag
-    chrome.storage.local.set({ 'isResuming': false });
+    chrome.storage.local.remove('isResuming');
   });
 });
